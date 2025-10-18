@@ -2,7 +2,7 @@
 import glfw
 from OpenGL.GL import *
 import numpy as np
-from shader import create_program_from_files
+from common.shader import create_program_from_files
 from pyrr import Matrix44, Vector3
 import time
 import os
