@@ -2,10 +2,13 @@
 import glfw
 from OpenGL.GL import *
 import numpy as np
-from common.shader import create_program_from_files
 from pyrr import Matrix44, Vector3
 import time
 import os
+
+import sys, os
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+from common.shader import create_program_from_files
 
 # ----- Helper: create VAO from vertex data -----
 def create_vao(vertices, indices=None):
