@@ -3,3 +3,4 @@ PyOpenGL_accelerate
 glfw 
 numpy 
 pyrr
+pygame

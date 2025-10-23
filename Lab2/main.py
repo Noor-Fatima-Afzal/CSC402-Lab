@@ -1,167 +1,198 @@
+# main.py
 import glfw
 from OpenGL.GL import *
 import numpy as np
-import math
-from utils import load_program
-import my_camera
+from pyrr import Matrix44, Vector3
+import time
+import os
 
-def main():
-    # Initialize GLFW
-    if not glfw.init():
-        raise Exception("GLFW initialization failed")
-    
-    # Create window
-    window = glfw.create_window(800, 600, "Transformations Lab", None, None)
-    if not window:
-        glfw.terminate()
-        raise Exception("Window creation failed")
-    
-    glfw.make_context_current(window)
-    glEnable(GL_DEPTH_TEST)
+import sys, os
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+from common.shader import create_program_from_files
 
-    # Load shader program
-    program = load_program("shaders/vertex.glsl", "shaders/fragment.glsl")
-
-    # Cube vertices (position + color)
-    vertices = np.array([
-        # positions        # colors
-        -0.5, -0.5, -0.5,  1, 0, 0,
-         0.5, -0.5, -0.5,  0, 1, 0,
-         0.5,  0.5, -0.5,  0, 0, 1,
-        -0.5,  0.5, -0.5,  1, 1, 0,
-        -0.5, -0.5,  0.5,  1, 0, 1,
-         0.5, -0.5,  0.5,  0, 1, 1,
-         0.5,  0.5,  0.5,  1, 1, 1,
-        -0.5,  0.5,  0.5,  0, 0, 0
-    ], dtype=np.float32)
-
-    # Cube indices
-    indices = np.array([
-        0,1,2, 2,3,0,  # back
-        4,5,6, 6,7,4,  # front
-        0,4,7, 7,3,0,  # left
-        1,5,6, 6,2,1,  # right
-        3,2,6, 6,7,3,  # top
-        0,1,5, 5,4,0   # bottom
-    ], dtype=np.uint32)
-
-    # Create VAO
+# ----- Helper: create VAO from vertex data -----
+def create_vao(vertices, indices=None):
+    # vertices: numpy array float32 (pos3,color3 interleaved)
     vao = glGenVertexArrays(1)
+    vbo = glGenBuffers(1)
     glBindVertexArray(vao)
 
-    # Create VBO
-    vbo = glGenBuffers(1)
     glBindBuffer(GL_ARRAY_BUFFER, vbo)
     glBufferData(GL_ARRAY_BUFFER, vertices.nbytes, vertices, GL_STATIC_DRAW)
 
-    # Create EBO
-    ebo = glGenBuffers(1)
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, ebo)
-    glBufferData(GL_ELEMENT_ARRAY_BUFFER, indices.nbytes, indices, GL_STATIC_DRAW)
+    if indices is not None:
+        ebo = glGenBuffers(1)
+        glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, ebo)
+        glBufferData(GL_ELEMENT_ARRAY_BUFFER, indices.nbytes, indices, GL_STATIC_DRAW)
+    else:
+        ebo = None
 
-    # Position attribute
-    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 24, ctypes.c_void_p(0))
+    # location 0 = position (vec3), location 1 = color (vec3)
+    stride = vertices.strides[0]
     glEnableVertexAttribArray(0)
-    
-    # Color attribute
-    glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 24, ctypes.c_void_p(12))
+    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, stride, ctypes.c_void_p(0))
     glEnableVertexAttribArray(1)
+    glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, stride, ctypes.c_void_p(12))
 
-    # Use shader program
-    glUseProgram(program)
+    glBindVertexArray(0)
+    return vao, vbo, ebo
 
-    # Get uniform locations
-    model_loc = glGetUniformLocation(program, "model")
-    view_loc = glGetUniformLocation(program, "view")
-    proj_loc = glGetUniformLocation(program, "projection")
+# ----- Vertex data -----
+# Triangle (2D, z=0)
+triangle_vertices = np.array([
+    # x, y, z,    r, g, b
+    -0.6, -0.4, 0.0,  1.0, 0.0, 0.0,
+     0.6, -0.4, 0.0,  0.0, 1.0, 0.0,
+     0.0,  0.6, 0.0,  0.0, 0.0, 1.0,
+], dtype=np.float32)
 
-    # Camera setup
-    eye = np.array([1.5, 1.5, 2.5], dtype=np.float32)
-    target = np.array([0, 0, 0], dtype=np.float32)
-    up = np.array([0, 1, 0], dtype=np.float32)
-    aspect = 800.0 / 600.0
-    projection = my_camera.perspective(math.radians(45), aspect, 0.1, 100.0)
+# Square (two triangles)
+square_vertices = np.array([
+    # x, y, z,    r, g, b
+    -0.5, -0.5, 0.0,  1.0, 0.5, 0.0,
+     0.5, -0.5, 0.0,  0.0, 1.0, 0.5,
+     0.5,  0.5, 0.0,  0.5, 0.0, 1.0,
+    -0.5,  0.5, 0.0,  1.0, 1.0, 0.0,
+], dtype=np.float32)
+square_indices = np.array([0,1,2,  2,3,0], dtype=np.uint32)
 
-    # Transformation variables
-    angle_x, angle_y = 0.0, 0.0
-    pos = np.array([0.0, 0.0, 0.0], dtype=np.float32)
+# Cube (3D) - 8 vertices, colors
+cube_vertices = np.array([
+    # x,y,z       r,g,b
+    -0.5,-0.5,-0.5,  1,0,0,
+     0.5,-0.5,-0.5,  0,1,0,
+     0.5, 0.5,-0.5,  0,0,1,
+    -0.5, 0.5,-0.5,  1,1,0,
+    -0.5,-0.5, 0.5,  1,0,1,
+     0.5,-0.5, 0.5,  0,1,1,
+     0.5, 0.5, 0.5,  1,1,1,
+    -0.5, 0.5, 0.5,  0.2,0.6,0.9,
+], dtype=np.float32)
 
-    # Key callback for controls
+cube_indices = np.array([
+    # back face
+    0,1,2, 2,3,0,
+    # front face
+    4,5,6, 6,7,4,
+    # left
+    0,4,7, 7,3,0,
+    # right
+    1,5,6, 6,2,1,
+    # bottom
+    0,1,5, 5,4,0,
+    # top
+    3,2,6, 6,7,3
+], dtype=np.uint32)
+
+# ----- Main -----
+def main():
+    if not glfw.init():
+        raise RuntimeError("glfw init failed")
+    # Request OpenGL 3.3 core
+    glfw.window_hint(glfw.CONTEXT_VERSION_MAJOR, 3)
+    glfw.window_hint(glfw.CONTEXT_VERSION_MINOR, 3)
+    glfw.window_hint(glfw.OPENGL_PROFILE, glfw.OPENGL_CORE_PROFILE)
+
+    window = glfw.create_window(800, 600, "pyOpenGL primitives", None, None)
+    if not window:
+        glfw.terminate()
+        raise RuntimeError("Failed to create window")
+
+    glfw.make_context_current(window)
+    # vsync on
+    glfw.swap_interval(1)
+
+    # compile shader program from files
+    here = os.path.dirname(os.path.abspath(__file__))
+    vert_path = os.path.join(here, "shaders", "basic.vert.glsl")
+    frag_path = os.path.join(here, "shaders", "basic.frag.glsl")
+    program = create_program_from_files(vert_path, frag_path)
+
+    # create VAOs
+    tri_vao, tri_vbo, _ = create_vao(triangle_vertices)
+    quad_vao, quad_vbo, quad_ebo = create_vao(square_vertices, square_indices)
+    cube_vao, cube_vbo, cube_ebo = create_vao(cube_vertices, cube_indices)
+
+    # enable depth for 3D cube
+    glEnable(GL_DEPTH_TEST)
+
+    # uniform location
+    uMVP_loc = glGetUniformLocation(program, "uMVP")
+
+    start_time = time.time()
+    current_prim = 1  # 1=triangle, 2=square, 3=cube
+
     def key_callback(window, key, scancode, action, mods):
-        nonlocal pos, angle_x, angle_y
-        if action == glfw.PRESS or action == glfw.REPEAT:
-            if key == glfw.KEY_UP: 
-                pos[1] += 0.1
-            elif key == glfw.KEY_DOWN: 
-                pos[1] -= 0.1
-            elif key == glfw.KEY_LEFT: 
-                pos[0] -= 0.1
-            elif key == glfw.KEY_RIGHT: 
-                pos[0] += 0.1
-            elif key == glfw.KEY_W: 
-                angle_x += 5
-            elif key == glfw.KEY_S: 
-                angle_x -= 5
-            elif key == glfw.KEY_A: 
-                angle_y += 5
-            elif key == glfw.KEY_D: 
-                angle_y -= 5
+        nonlocal current_prim
+        if action == glfw.PRESS:
+            if key == glfw.KEY_1:
+                current_prim = 1
+            elif key == glfw.KEY_2:
+                current_prim = 2
+            elif key == glfw.KEY_3:
+                current_prim = 3
+            elif key == glfw.KEY_ESCAPE:
+                glfw.set_window_should_close(window, True)
 
     glfw.set_key_callback(window, key_callback)
 
-    # Main render loop
     while not glfw.window_should_close(window):
-        # Clear buffers
-        glClearColor(0.1, 0.1, 0.15, 1.0)
+        now = time.time()
+        t = now - start_time
+
+        width, height = glfw.get_framebuffer_size(window)
+        aspect = width / height if height > 0 else 1.0
+        glViewport(0,0,width,height)
+        glClearColor(0.12, 0.12, 0.15, 1.0)
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)
 
-        # Create model matrix (Translation * Rotation)
-        # Rotation around X-axis
-        rad_x = math.radians(angle_x)
-        rot_x = np.array([
-            [1, 0, 0, 0],
-            [0, math.cos(rad_x), -math.sin(rad_x), 0],
-            [0, math.sin(rad_x), math.cos(rad_x), 0],
-            [0, 0, 0, 1]
-        ], dtype=np.float32)
-        
-        # Rotation around Y-axis
-        rad_y = math.radians(angle_y)
-        rot_y = np.array([
-            [math.cos(rad_y), 0, math.sin(rad_y), 0],
-            [0, 1, 0, 0],
-            [-math.sin(rad_y), 0, math.cos(rad_y), 0],
-            [0, 0, 0, 1]
-        ], dtype=np.float32)
-        
-        # Translation matrix
-        trans = np.eye(4, dtype=np.float32)
-        trans[:3, 3] = pos
-        
-        # Combine transformations
-        model = trans @ rot_x @ rot_y
+        glUseProgram(program)
 
-        # Create view matrix
-        view = my_camera.look_at(eye, target, up)
+        if current_prim == 1:
+            # Triangle: orthographic-ish, no depth
+            proj = Matrix44.identity()
+            view = Matrix44.identity()
+            model = Matrix44.from_scale([1.0, 1.0, 1.0])
+            mvp = proj * view * model
+            glUniformMatrix4fv(uMVP_loc, 1, GL_FALSE, mvp.astype('float32').flatten())
+            glBindVertexArray(tri_vao)
+            glDrawArrays(GL_TRIANGLES, 0, 3)
 
-        # Upload matrices to shaders (transpose for OpenGL)
-        glUniformMatrix4fv(model_loc, 1, GL_TRUE, model)
-        glUniformMatrix4fv(view_loc, 1, GL_TRUE, view)
-        glUniformMatrix4fv(proj_loc, 1, GL_TRUE, projection)
+        elif current_prim == 2:
+            # Square: use orthographic projection mapping to aspect
+            proj = Matrix44.orthogonal_projection(-aspect, aspect, -1, 1, -1, 1)
+            view = Matrix44.identity()
+            model = Matrix44.identity()
+            mvp = proj * view * model
+            glUniformMatrix4fv(uMVP_loc, 1, GL_FALSE, mvp.astype('float32').flatten())
+            glBindVertexArray(quad_vao)
+            glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, None)
 
-        # Draw cube
-        glBindVertexArray(vao)
-        glDrawElements(GL_TRIANGLES, len(indices), GL_UNSIGNED_INT, None)
+        else:
+            # Cube: perspective + basic rotation
+            proj = Matrix44.perspective_projection(45.0, aspect, 0.1, 100.0)
+            cam_pos = Vector3([3.0, 3.0, 3.0])
+            view = Matrix44.look_at(eye=cam_pos, target=Vector3([0.0,0.0,0.0]), up=Vector3([0.0,1.0,0.0]))
+            rot = Matrix44.from_y_rotation(t * 0.9) * Matrix44.from_x_rotation(t * 0.6)
+            model = rot
+            trans = Matrix44.from_translation([0.0, 0.0, 0.0])
+            mvp = proj * view * trans * model
+            glUniformMatrix4fv(uMVP_loc, 1, GL_FALSE, mvp.astype('float32').flatten())
+            glBindVertexArray(cube_vao)
+            glDrawElements(GL_TRIANGLES, len(cube_indices), GL_UNSIGNED_INT, None)
 
-        # Swap buffers and poll events
+        glBindVertexArray(0)
+        glUseProgram(0)
+
         glfw.swap_buffers(window)
         glfw.poll_events()
 
-    # Cleanup
-    glDeleteVertexArrays(1, [vao])
-    glDeleteBuffers(1, [vbo])
-    glDeleteBuffers(1, [ebo])
+    # cleanup
+    glDeleteVertexArrays(1, [tri_vao])
+    glDeleteVertexArrays(1, [quad_vao])
+    glDeleteVertexArrays(1, [cube_vao])
     glDeleteProgram(program)
+
     glfw.terminate()
 
 if __name__ == "__main__":
