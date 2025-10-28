@@ -32,7 +32,7 @@ Install the following dependencies:
 
 ```bash
 pip install PyOpenGL PyOpenGL_accelerate pygame numpy pillow
-
+```
 ---
 
 ## Weekly Labs Overview
@@ -51,3 +51,4 @@ pip install PyOpenGL PyOpenGL_accelerate pygame numpy pillow
 | **Week 10** | Tessellation | Tessellated terrain, dynamic LOD |
 | **Week 11** | Geometry Shaders & Effects | Extrude primitives, fog & blending |
 | **Week 12** | Game Graphics & Final Project | Combine all features into 3D scene |
+
