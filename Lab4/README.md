@@ -1,10 +1,10 @@
-# 🧠 Lab 3 — 1D Convolution Filter using OpenGL & Shaders
+# Lab 4: 1D Convolution Filter using OpenGL & Shaders
 
 This lab demonstrates how to apply **1D convolution filters** (such as blur, sharpen, and edge detection) to a generated texture using **OpenGL shaders**.  
 It uses **Python + GLFW + PyOpenGL + NumPy** for rendering and texture manipulation.
 
 ---
-## 🧠 How It Works
+## How It Works
 
 ### 1. **Shaders**
 
@@ -22,7 +22,7 @@ It uses **Python + GLFW + PyOpenGL + NumPy** for rendering and texture manipulat
 
 ---
 
-## 🧵 Uniform Variables in Shaders
+## Uniform Variables in Shaders
 
 | **Uniform Name** | **Type** | **Description** |
 |------------------|----------|-----------------|
@@ -34,7 +34,7 @@ It uses **Python + GLFW + PyOpenGL + NumPy** for rendering and texture manipulat
 
 ---
 
-## 🖼️ Example Filters Explained
+## Example Filters Explained
 
 - **Original** — Displays the texture without modification.  
 - **Gaussian Blur** — Smoothens the image by averaging neighboring pixels.  
@@ -43,7 +43,7 @@ It uses **Python + GLFW + PyOpenGL + NumPy** for rendering and texture manipulat
 
 ---
 
-## 🧑‍💻 Learning Objectives
+## Learning Objectives
 
 By completing this lab, students will:
 
@@ -54,7 +54,7 @@ By completing this lab, students will:
 
 ---
 
-## 🧹 Cleanup
+## Cleanup
 
 The program deletes all allocated OpenGL objects and terminates **GLFW** properly when closed.
 
